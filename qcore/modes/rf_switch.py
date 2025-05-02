@@ -1,4 +1,5 @@
 """ """
+from qualang_tools.config import Port
 
 from qcore.resource import Resource
 
@@ -9,7 +10,7 @@ class RFSwitch(Resource):
     # the OPX has an intrinsic delay of analog channel with respect to digital channel
     INTRINSIC_DELAY: int = 136
 
-    def __init__(self, name: str, port: int, delay: int = 0, buffer: int = 0) -> None:
+    def __init__(self, name: str, port: Port, delay: int = 0, buffer: int = 0) -> None:
         """ """
         self.port = port  # OPX digital output port this switch is connected to
 
