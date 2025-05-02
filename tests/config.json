@@ -1,0 +1,71 @@
+{
+    "version": 1,
+    "controllers": {
+        "con1": {
+            "type": "opx1000",
+            "fems": {
+                "1": {
+                    "analog_outputs": {
+                        "1": {
+                            "upconverters": {
+                                "1": {
+                                    "frequency": 5020000000.0
+                                }
+                            },
+                            "band": 2
+                        }
+                    },
+                    "type": "MW",
+                    "analog_inputs": {}
+                },
+                "2": {
+                    "type": "MW",
+                    "analog_outputs": {},
+                    "analog_inputs": {}
+                },
+                "3": {
+                    "type": "LF"
+                },
+                "5": {
+                    "type": "LF"
+                }
+            }
+        }
+    },
+    "elements": {
+        "test": {
+            "MWInput": {
+                "port": [
+                    "con1",
+                    1,
+                    1
+                ],
+                "upconverter": 1
+            },
+            "intermediate_frequency": -20000000,
+            "operations": {
+                "test": "test.test"
+            }
+        }
+    },
+    "pulses": {
+        "test.test": {
+            "operation": "control",
+            "length": 24,
+            "waveforms": {
+                "I": "test.test.waveform.I",
+                "Q": "test.test.waveform.Q"
+            }
+        }
+    },
+    "waveforms": {
+        "test.test.waveform.I": {
+            "type": "constant",
+            "sample": 0.2
+        },
+        "test.test.waveform.Q": {
+            "type": "constant",
+            "sample": 0.0
+        }
+    }
+}
