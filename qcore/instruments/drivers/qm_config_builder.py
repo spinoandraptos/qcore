@@ -86,12 +86,10 @@ class QMConfigBuilder:
 
         if self.uses_opx1000():
             config.set_fem_types()
+            config = deep_merge(config, self._opx.settings)
             config.infer_mw_fem_settings()
-
+            
         self._config = json.loads(json.dumps(self._config))  # convert recursively to `dict` from `defaultdict`
-
-        if self.uses_opx1000():
-            self._config = deep_merge(self._config, self._opx.settings)
 
 
     def _check_modes(self, *modes: Mode) -> None:
@@ -129,12 +127,12 @@ class QMConfigBuilder:
         return self._opx.type == 'opx1000'
 
 
-def deep_merge(d1, d2):
-    result = dict(d1)  # shallow copy of d1
+def deep_merge(d1: QMConfig, d2: dict):
+    result = d1  # shallow copy of d1
     for k, v in d2.items():
         if (
             k in result
-            and isinstance(result[k], dict)
+            and isinstance(result[k], QMConfig)
             and isinstance(v, dict)
         ):
             result[k] = deep_merge(result[k], v)

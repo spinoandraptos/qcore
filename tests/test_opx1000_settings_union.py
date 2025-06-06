@@ -16,10 +16,11 @@ def test_mw_fem_single_output_port(make_qm, make_modes):
         "controllers": {
             "con1": {
                 "fems": {
-                    '1': {
+                    1: {
                         "analog_outputs": {
-                            '1': {
-                                "full_scale_power_dbm": -8
+                            1: {
+                                "full_scale_power_dbm": -8,
+                                "upconverters": {1: {"frequency": 6e9 + 20e6}},
                             }
                         }
                     }
@@ -27,7 +28,7 @@ def test_mw_fem_single_output_port(make_qm, make_modes):
             }
         }
     }
-    qm = make_qm(make_modes("modes/mw_fem_single_output_port.yaml"), settings=settings)
+    qm = make_qm(make_modes("modes/mw_fem_single_output_port_settings_union.yaml"), settings=settings)
 
     with program() as prog:
         play("test", "test")
@@ -45,10 +46,10 @@ def test_mw_fem_single_output_port(make_qm, make_modes):
         "sampling_rate": 1000000000.0,
         "shareable": False,
         # configured
-        "upconverters": { 1: { "frequency": 5e9 + 20e6 } },
+        "upconverters": { 1: { "frequency": 6e9 + 20e6 } },
         "band": 2
     }
     assert config["elements"]["test"]["MWInput"]["port"] == ('con1', 1, 1)
     assert config["elements"]["test"]["MWInput"]["upconverter"] == 1
-    assert config["elements"]["test"]["intermediate_frequency"] == -20e6
+    assert config["elements"]["test"]["intermediate_frequency"] == -123e6
 

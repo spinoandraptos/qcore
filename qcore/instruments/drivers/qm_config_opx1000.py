@@ -22,6 +22,7 @@ class QMConfigOPX1000(QMConfig):
 
     def __init__(self, controllers_info: dict = None) -> None:
         self.controllers_info = controllers_info
+        self.allocate_frequencies_automatically = False
         super().__init__()
 
     def set_controllers(self) -> None:
@@ -105,8 +106,20 @@ class QMConfigOPX1000(QMConfig):
 
 
     def infer_mw_fem_settings(self):
-        self.set_ducs()
+        if self.allocate_frequencies_automatically:
+            self.set_ducs()
+        else:
+            self.set_upconverters_to_1()
         self.set_bands()
+
+    def set_upconverters_to_1(self):
+        """
+        By default, we assume that we only ever have one upconverter, so we set
+        all element upconverters to index 1.
+        """
+        for element in self["elements"].values():
+            if "MWInput" in element:
+                element["MWInput"]["upconverter"] = 1
 
     def set_bands(self):
         """
