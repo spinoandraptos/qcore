@@ -30,7 +30,7 @@ class QM(Instrument):
         self,
         modes: tuple[Mode] = None,
         oscillators: tuple[LMS] = None,
-        opx: OPX = None
+        opx: OPX = None,
         config_path: str = None
     ) -> None:
         """ """

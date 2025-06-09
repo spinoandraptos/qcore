@@ -31,7 +31,7 @@ class QMConfigOPX1000(QMConfig):
 
     def set_analog_output_port(self, port: FEMPort, offset: float) -> None:
         fem, port = port
-        self.check_input_port_bounds(port, "Analog output port")
+        self.check_output_port_bounds(port, "Analog output port")
         controllers_config = self["controllers"][QMConfig._CONTROLLER_NAME]["fems"][fem]
         controllers_config["analog_outputs"][port] = type(self)()
         if self.fem_type(self._CONTROLLER_NAME, fem) == "LF":
