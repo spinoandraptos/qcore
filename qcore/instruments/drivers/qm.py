@@ -7,6 +7,7 @@ from qm.QuantumMachine import QuantumMachine
 from qm import QuantumMachinesManager
 from qm import QmJob
 from qm.api.v2.qmm_api import ControllerOPX1000
+
 from qm.qua._dsl import _ProgramScope
 from qm.octave import QmOctaveConfig
 from qcore.instruments.drivers.qm_octave_setter import OctaveUnit, octave_declaration
@@ -30,12 +31,14 @@ class QM(Instrument):
         modes: tuple[Mode] = None,
         oscillators: tuple[LMS] = None,
         opx: OPX = None
+        config_path: str = None
     ) -> None:
         """ """
         self._status: bool = None
 
         self._qmm: QuantumMachinesManager = None
         self._qm: QuantumMachine = None
+        self._config_path = config_path
         self._config: QMConfig = None
 
         self._qcb: QMConfigBuilder = QMConfigBuilder()
@@ -59,12 +62,9 @@ class QM(Instrument):
         if self._qmm is not None:
             self.disconnect()
         try:
-            octave_config = None
-            if self.requires_octave():
-                self._make_octave_config()
-
+    
             if self.uses_opx_plus() or self.uses_opx1000():
-                self._connect_to_opx(octave_config)
+                self._connect_to_opx()
             else:
                 self._connect_to_opx_one()
 
@@ -76,34 +76,17 @@ class QM(Instrument):
             if self._modes is not None and self._oscillators is not None:
                 self.open(self._modes, self._oscillators, self._opx)
 
-    def _connect_to_opx(self, octave_config=None):
+    def _connect_to_opx(self):
         self._qmm = QuantumMachinesManager(
             host=self._opx.id,
             port=None,
-            cluster_name=self._opx.cluster_name,
-            octave=octave_config,
+            cluster_name=self._opx_plus.cluster_name,
+            octave_calibration_db_path=self._config_path,
         )
 
     def _connect_to_opx_one(self):
         self._qmm = QuantumMachinesManager(port=QM.QMM_PORT)
 
-    def _make_octave_config(self) -> QmOctaveConfig:
-        octaves = []
-        for name, octave in self.get_octaves().items():
-            octaves.append(OctaveUnit(name, octave.id, port=octave.port, con="con1"))
-
-        octave_calibration_db_paths = set(
-            [octave.calibration_db_path for octave in self.get_octaves().values()]
-        )
-        assert (
-            len(octave_calibration_db_paths) == 1
-        ), "Currently support only one calibration_db"
-
-        octave_config = octave_declaration(
-            octaves, calibration_db_path=octave_calibration_db_paths.pop()
-        )
-
-        return octave_config
 
     def open(
         self, modes: tuple[Mode], oscillators: tuple[LMS], opx: OPX = None
@@ -134,7 +117,7 @@ class QM(Instrument):
         """ """
         if self._qm is not None:
             self._qm.close()
-        self._qmm.close()
+        # self._qmm.close()
         self._qmm = None
         self._status = False
 

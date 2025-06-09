@@ -1,18 +1,17 @@
 """ """
-
-from qcore.instruments.drivers import (
-    Octave,
-    OPXPlus,
-    OPX1000,
-    # GS200,
-    # LMS,
-    # MS46522B,
-    QM,
-    # SA124,
-    # SC5503B,
-    # SC5511A,
-)
-from qcore.instruments.drivers import QM
+# from qcore.instruments.drivers import (
+#     Octave,
+#     OPXPlus,
+#     GS200,
+#     LMS,
+#     MS46522B,
+#     QM,
+#     SA124,
+#     SC5503B,
+#     SC5511A,
+#     APUASYN20,
+# )
+from qcore.instruments.drivers import Octave, OPXPlus, GS200, LMS, MS46522B, QM, SA124, SC5503B, SC5511A, APUASYN20
 from qcore.instruments.instrument import DummyInstrument
 
 __all__ = [
@@ -20,4 +19,5 @@ __all__ = [
     "Octave",
     "OPXPlus",
     "DummyInstrument",
+    "APUASYN20",
 ]

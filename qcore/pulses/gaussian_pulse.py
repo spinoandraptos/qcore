@@ -21,9 +21,7 @@ class GaussianPulse(Pulse):
         """ """
         self.sigma: float = sigma
         self.chop: int = chop
-        super().__init__(
-            name=name, length=None, I_ampx=I_ampx, Q_ampx=Q_ampx, pad=pad, **parameters
-        )
+        super().__init__(name=name, length=None, I_ampx=I_ampx, Q_ampx=Q_ampx, pad=pad, **parameters)
         del self.length  # not needed once total_length is overriden below
 
     @property
@@ -43,7 +41,7 @@ class GaussianPulse(Pulse):
         ts = np.linspace(start, stop, length)
         pad = np.zeros(self.pad) if self.pad else []
 
-        i_samples = np.exp(-(ts**2) / (2.0 * self.sigma**2)) * self.total_I_ampx
+        i_samples = np.exp(-(ts**2) / (2.0 * self.sigma**2)) *  self.total_I_ampx
         i_wave = (np.concatenate((i_samples, pad))).tolist()
 
         if self.Q_ampx is None:
