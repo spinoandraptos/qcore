@@ -1,4 +1,5 @@
 """ """
+from qualang_tools.config import Port
 
 from qcore.resource import Resource
 

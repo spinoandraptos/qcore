@@ -1,0 +1,42 @@
+- !<Readout>
+  name: test
+  int_freq: 50000000
+  lo_name: opx1000
+  mixer_offsets:
+    I: 0.0
+    Q: 0.0
+    out1: 0.0
+    out2: 0.0
+    G: 0.0
+    P: 0.0
+  octave_mixed: false
+  operations:
+    test: !<ConstantReadoutPulse>
+      name: test
+      I_ampx: 1.0
+      Q_ampx: null
+      digital_marker: null
+      has_optimized_weights: false
+      length: 24
+      pad: 0
+      threshold: null
+      total_I_amp: 0.2
+      total_length: 24
+      weights:
+      - 1.0
+      - 0.0
+      - 0.0
+      - 1.0
+      - 0.0
+      - -1.0
+  ports:
+    I:
+    - 3
+    - 1
+    out1:
+    - 3
+    - 1
+  rf_switch: null
+  rf_switch_on: false
+  smearing: 0
+  tof: 180

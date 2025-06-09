@@ -355,6 +355,11 @@ class Experiment:
             logger.info(msg)
             self._qm.disconnect()
 
+    def simulate(self):
+        self._qm: QM = self._get_qm()
+        qua_program = self._build_qua_program()
+        self._qm.simulate(qua_program, self.repetitions)
+
     def _run_with_qcore_sweep(self, qcore_sweep: Sweep):
         """ """
         name, target, points = qcore_sweep.name, qcore_sweep.target, qcore_sweep.data
@@ -603,10 +608,11 @@ class Experiment:
                     message = f"'{lo_name = }' for Mode '{name}' not found on stage."
                     logger.error(message)
                     raise ExperimentInitializationError(message)
+
         return QM(
             modes=mode_lo_map.keys(),
             oscillators=mode_lo_map.values(),
-            opx_plus=self.instruments.get("opx_plus"),
+            opx=self.instruments.get("opx_plus", self.instruments.get("opx1000")),
             config_path=f"{self._folder}/config"
         )
 

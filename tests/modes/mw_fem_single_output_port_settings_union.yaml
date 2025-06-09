@@ -1,0 +1,26 @@
+- !<Qubit>
+  name: test
+  int_freq: -123000000
+  lo_name: opx1000
+  mixer_offsets:
+    I: 0.0
+    Q: 0.0
+    G: 0.0
+    P: 0.0
+  octave_mixed: false
+  operations:
+    test: !<ConstantPulse>
+      name: test
+      I_ampx: 1.0
+      Q_ampx: 0.0
+      digital_marker: null
+      length: 24
+      pad: 0
+      total_I_amp: 0.2
+      total_length: 24
+  ports:
+    I:
+    - 1
+    - 1
+  rf_switch: null
+  rf_switch_on: false

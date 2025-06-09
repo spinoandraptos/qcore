@@ -1,11 +1,13 @@
 """ """
-import os
 import json
 import numpy as np
+from qm import SimulationConfig
 
 from qm.QuantumMachine import QuantumMachine
 from qm import QuantumMachinesManager
 from qm import QmJob
+from qm.api.v2.qmm_api import ControllerOPX1000
+
 from qm.qua._dsl import _ProgramScope
 from qm.octave import QmOctaveConfig
 from qcore.instruments.drivers.qm_octave_setter import OctaveUnit, octave_declaration
@@ -15,7 +17,7 @@ from qcore.instruments.drivers.qm_config_builder import QMConfigBuilder, QMConfi
 from qcore.instruments.drivers.qm_result_fetcher import QMResultFetcher
 from qcore.instruments.drivers.vaunix_lms import LMS
 from qcore.instruments.drivers.qm_octave_dummy import Octave
-from qcore.instruments.drivers.qm_opx_plus_dummy import OPXPlus
+from qcore.instruments.drivers.qm_opx import OPXPlus, OPX1000, OPX
 from qcore.modes.mode import Mode
 
 
@@ -28,7 +30,7 @@ class QM(Instrument):
         self,
         modes: tuple[Mode] = None,
         oscillators: tuple[LMS] = None,
-        opx_plus: OPXPlus = None,
+        opx: OPX = None
         config_path: str = None
     ) -> None:
         """ """
@@ -38,6 +40,7 @@ class QM(Instrument):
         self._qm: QuantumMachine = None
         self._config_path = config_path
         self._config: QMConfig = None
+
         self._qcb: QMConfigBuilder = QMConfigBuilder()
 
         self._modes: tuple[Mode] = modes
@@ -46,7 +49,7 @@ class QM(Instrument):
         self._job: QmJob = None
         self._qrf: QMResultFetcher = None
 
-        self._opx_plus = opx_plus
+        self._opx = opx
 
         super().__init__(id=None, name="QM")
 
@@ -59,29 +62,23 @@ class QM(Instrument):
         if self._qmm is not None:
             self.disconnect()
         try:
-            if self.requires_octave():
-                if self.uses_opx_plus():
-                    self._connect_to_opx_plus_and_octave()
-                else:
-                    raise NotImplementedError()
+    
+            if self.uses_opx_plus() or self.uses_opx1000():
+                self._connect_to_opx()
             else:
-                if self.uses_opx_plus():
-                    self._connect_to_opx_plus()
-                else:
-                    self._connect_to_opx_one()
+                self._connect_to_opx_one()
+
         except Exception as err:
             raise ConnectionError(f"Failed to connect QM. Details: {err}.") from None
+
         else:
             self._status = True
             if self._modes is not None and self._oscillators is not None:
-                self.open(self._modes, self._oscillators, self._opx_plus)
+                self.open(self._modes, self._oscillators, self._opx)
 
-    def _connect_to_opx_plus_and_octave(self):
-        self._connect_to_opx_plus()
-
-    def _connect_to_opx_plus(self):
+    def _connect_to_opx(self):
         self._qmm = QuantumMachinesManager(
-            host=self._opx_plus.id,
+            host=self._opx.id,
             port=None,
             cluster_name=self._opx_plus.cluster_name,
             octave_calibration_db_path=self._config_path,
@@ -92,12 +89,25 @@ class QM(Instrument):
 
 
     def open(
-        self, modes: tuple[Mode], oscillators: tuple[LMS], opx_plus: OPXPlus = None
+        self, modes: tuple[Mode], oscillators: tuple[LMS], opx: OPX = None
     ) -> QuantumMachine:
         """ """
-        self._config = self._qcb.build_config(modes, oscillators, opx_plus)
+        controllers_info = self.get_controllers_info()
+        self._config = self._qcb.build_config(modes, oscillators, opx, controllers_info)
+        with open("config.json", "w+") as f:
+            json.dump(self._config, f, indent=4)
         self._qm = self._qmm.open_qm(self._config, close_other_machines=True)
         return self._qm
+
+
+    def get_controllers_info(self):
+        controllers = self._qmm.get_controllers()
+        controllers_info = {}
+        for controller in controllers:
+            if isinstance(controller, ControllerOPX1000):
+                controllers_info[controller.name] = controller.fems
+
+        return controllers_info
 
     def get_config(self) -> dict:
         """ """
@@ -115,6 +125,18 @@ class QM(Instrument):
     def status(self) -> bool:
         """ """
         return self._status
+
+    def simulate(self, qua_program: _ProgramScope, total_count=None):
+        """ """
+        if self._config is None or self._qm is None:
+            logger.warning("Can't execute program, QM hasn't been opened with a config")
+        else:
+            simulation_config = SimulationConfig(duration=10000)  # In clock cycles = 4ns
+            job = self._qm.simulate(qua_program, simulation_config)
+            samples = job.get_simulated_samples()
+            waveform_report = job.get_simulated_waveform_report()
+            waveform_report.create_plot(samples, plot=True, save_path="./")
+            return self._job
 
     def execute(self, qua_program: _ProgramScope, total_count=None):
         """ """
@@ -149,5 +171,8 @@ class QM(Instrument):
                 octaves[oscillator.name] = oscillator
         return octaves
 
+    def uses_opx1000(self) -> bool:
+        return self._opx.type == 'opx1000'
+
     def uses_opx_plus(self) -> bool:
-        return self._opx_plus is not None
+        return self._opx.type == 'opx_plus'

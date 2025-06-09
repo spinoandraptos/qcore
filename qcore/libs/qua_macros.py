@@ -2,7 +2,7 @@
 
 from qm import qua
 from qm.qua.lib import Cast
-from qm.qua._dsl import _Variable#, _Expression
+from qm.qua._dsl import _Variable
 from qm.qua._expressions import QuaExpression
 
 from qcore.helpers.logger import logger

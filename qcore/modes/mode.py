@@ -1,5 +1,5 @@
 """ """
-from typing import Any, Union
+from typing import Any, Union, Tuple
 
 from qm import qua
 from qm.qua._dsl import _Variable
@@ -11,6 +11,8 @@ from qcore.pulses.digital_waveform import DigitalWaveform
 from qcore.pulses.readout_pulse import ReadoutPulse
 from qcore.resource import Resource
 
+
+FEMPort = Tuple[int, int]
 
 class Mode(Resource):
     """ """
@@ -32,7 +34,7 @@ class Mode(Resource):
         self.lo_name: str = str(lo_name)
         self.int_freq: float = int_freq
 
-        self._ports: dict[str, int] = dict.fromkeys(Mode.PORTS_KEYS)
+        self._ports: dict[str, Union[int, FEMPort]] = dict.fromkeys(Mode.PORTS_KEYS)
         self._mixer_offsets: dict[str, float] = dict.fromkeys(self.OFFSETS_KEYS, 0.0)
         self._rf_switch: RFSwitch = None
         self._rf_switch_on: bool = False
@@ -77,7 +79,7 @@ class Mode(Resource):
 
     def has_mixed_inputs(self) -> bool:
         """ """
-        return self._ports["I"] is not None and self._ports["Q"] is not None
+        return self._ports.get("I") is not None and self._ports.get("Q") is not None
 
     @property
     def mixer_offsets(self) -> dict[str, float]:
