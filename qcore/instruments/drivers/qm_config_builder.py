@@ -454,7 +454,7 @@ class QMConfigBuilder:
             # todo: currently, since los are remote objects, there is no way to
             #  differentiate between a LMS and an Octave. We will assume for now
             #  that an octave has "octave" in its name.
-            if "octave" in lo.name:
+            if "oct" in lo.name:
                 self._octaves[lo.name] = lo
             # try:
             #     self._lo_frequencies[lo.name] = lo.frequency
