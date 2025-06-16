@@ -70,6 +70,11 @@ class OPX1000(Instrument):
     def settings(self) -> DictQuaConfig:
         """ """
         return self._settings
+    
+    @settings.setter
+    def settings(self, settings:dict) -> None:
+        """ """
+        self._settings = settings
 
     @cluster_name.getter
     def cluster_name(self) -> str:
