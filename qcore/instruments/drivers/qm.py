@@ -80,7 +80,7 @@ class QM(Instrument):
         self._qmm = QuantumMachinesManager(
             host=self._opx.id,
             port=None,
-            cluster_name=self._opx_plus.cluster_name,
+            cluster_name=self._opx.cluster_name,
             octave_calibration_db_path=self._config_path,
         )
 
