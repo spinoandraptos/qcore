@@ -7,7 +7,7 @@ import lmfit
 from lmfit import Model
 from lmfit.models import LinearModel
 import numpy as np
-
+#import peakutils
 
 def create_params(**kwargs):
     """patch method because lmfit does not like working with np datatypes"""
@@ -185,6 +185,8 @@ def gaussian(y, x):
         sig = abs(x[-1] - x[0]) / 10
         yrange = np.max(y) - np.min(y)
         ofs_min, ofs_max = np.min(y) - 0.3 * yrange, np.max(y) + 0.3 * yrange
+        # ofs_min, ofs_max = np.min(y), np.max(y) - yrange/2
+
         return create_params(
             x0={"value": x[peak_idx], "min": np.min(x), "max": np.max(x)},
             sig={"value": sig, "min": abs(x[1] - x[0]), "max": abs(x[-1] - x[0])},
@@ -195,6 +197,68 @@ def gaussian(y, x):
     result = Model(fn).fit(y, params(y, x), x=x)
     return result.best_fit, result.best_values
 
+# def n_gaussian(y, x):
+#     """ """
+
+#     def fn(**kwargs):#fn(x, x0, sig, ofs, amp):
+#         f = kwargs['ofs']
+#         for i in range(n):
+#             x0 = kwargs["x0_{0}".format(i)]
+#             sig = kwargs["sig_{0}".format(i)]
+#             amp = kwargs["amp_{0}".format(i)]
+#             f += amp * np.exp(-((x - x0) ** 2) / (2 * sig**2))
+#         return f
+#     def params(y, x):
+#         """ """
+#         ofs = (np.average(y[0:10]) + np.average(y[-10:-1])) / 2
+#         indexes = peakutils.indexes(y, thres=ofs *2, min_dist = 1)
+#         sig0 = abs(x[-1] - x[0]) / 10
+#         yrange = np.max(y) - np.min(y)
+#         ofs_min, ofs_max = np.min(y) - 0.3 * yrange, np.max(y) + 0.3 * yrange
+#         n = len(indexes)
+        
+#         par = {}
+#         par['ofs'] = {"value": ofs, "min": ofs_min, "max": ofs_max}
+#         par['n'] = n
+#         for i in range(len(indexes)):
+#             par["x0_{0}".format(i)] = {"value": x[indexes][i], "min": np.min(x), "max": np.max(x)}
+#             par["sig_{0}".format(i)] = {"value": sig0, "min": abs(x[1] - x[0]), "max": abs(x[-1] - x[0])}
+#             par["amp_{0}".format(i)] ={"value": y[indexes][i] - ofs, "min": -3 * yrange, "max": 3 * yrange}
+            
+#         return n, lmfit.create_params(**par)
+        
+#     n, guess = params(y,x)
+#     result = Model(fn, independent_vars = ['n']).fit(y, guess, x=x)
+#     return result.best_fit, result.best_values
+
+def double_gaussian(y, x):
+    """ """
+
+    def fn(x, x0, x1, sig0, sig1, ofs, amp0, amp1):
+        """ """
+        return ofs + amp0 * np.exp(-((x - x0) ** 2) / (2 * sig0**2)) +  amp1 * np.exp(-((x - x1) ** 2) / (2 * sig1**2))
+
+    def params(y, x):
+        """ """
+        ofs = (y[0] + y[-1]) / 2
+        peak0_idx = np.argmax(abs(y - ofs))
+        sig0 = abs(x[-1] - x[0]) / 10
+        yrange = np.max(y) - np.min(y)
+        ofs_min, ofs_max = np.min(y) - 0.3 * yrange, np.max(y) + 0.3 * yrange
+        peak1_idx = np.argmax(abs(y[0:int(len(x)/2)] - ofs)) #check only first half of the sweep
+
+        return create_params(
+            x0={"value": x[peak0_idx], "min": np.min(x), "max": np.max(x)},
+            x1 = {"value": x[peak1_idx], "min": np.min(x), "max": np.max(x)},
+            sig0 = {"value": sig0, "min": abs(x[1] - x[0]), "max": abs(x[-1] - x[0])},
+            sig1 = {"value": sig0, "min": abs(x[1] - x[0]), "max": abs(x[-1] - x[0])},
+            ofs={"value": ofs, "min": ofs_min, "max": ofs_max},
+            amp0={"value": y[peak0_idx] - ofs, "min": -3 * yrange, "max": 3 * yrange},
+            amp1 ={"value": y[peak1_idx] - ofs, "min": -3 * yrange, "max": 3 * yrange},
+        )
+
+    result = Model(fn).fit(y, params(y, x), x=x)
+    return result.best_fit, result.best_values
 
 def gaussian2d_symmetric(z, y, x):
     """ """
@@ -314,6 +378,71 @@ def sine(y, x, return_params=False):
         return fit_params
     result = Model(fn).fit(y, fit_params, x=x)
     return result.best_fit, result.best_values
+
+def char_func_coh_state_2(y, x):
+    def fn(x, amp, alpha, ofs):
+        scale = 2
+        return (
+            amp * np.exp(-np.abs(x * scale) ** 2 / 2) * np.cos(2 * alpha * x * scale)
+            + ofs
+        )
+
+    def params(y, x):
+        ofs = (y[0] + y[-1]) / 2
+        peak_idx = np.argmax(abs(y - ofs))
+        yrange = np.max(y) - np.min(y)
+        ofs_min, ofs_max = np.min(y) - 0.3 * yrange, np.max(y) + 0.3 * yrange
+        return create_params(
+            ofs={"value": ofs, "min": ofs_min, "max": ofs_max},
+            amp={
+                "value": y[peak_idx] - ofs,
+                "min": -3 * yrange - ofs,
+                "max": 3 * yrange - ofs,
+            },
+            alpha=1.5,
+        )
+
+    result = Model(fn).fit(y, params(y, x), x=x)
+    return result.best_fit, result.best_values
+
+def char_func_coh_state_3(y, x):
+    # set offset manually
+    def fn(x, alpha, amp, ofs):
+        #amp = 0.4
+        scale = 3
+        # ofs = 0.48 # remove this if want to let the plotter decide.
+        return (
+            amp * np.exp(-np.abs(x * scale) ** 2 / 2) * np.cos(2 * alpha * x * scale)
+            + ofs
+        )
+    def params(y, x, alpha_guess=3):
+        ofs = (y[0] + y[-1]) / 2
+        peak_idx = np.argmax(abs(y - ofs))
+        yrange = np.max(y) - np.min(y)
+        ofs_min, ofs_max = np.min(y) - 0.3 * yrange, np.max(y) + 0.3 * yrange
+        return create_params(
+            ofs={"value": ofs, "min": ofs_min, "max": ofs_max},
+            amp={
+                "value": y[peak_idx] - ofs,
+                "min": -3 * yrange - ofs,
+                "max": 3 * yrange - ofs,
+            },
+            alpha=alpha_guess,
+        )
+    # Try just two reasonable guesses - one high and one low
+    # This is fast enough for live plotting but gives flexibility
+    alpha_guesses = [1.0, 3.0, 5.0]  # Low and high alpha values
+    best_result = None
+    best_chisqr = float('inf')
+    for alpha_guess in alpha_guesses:
+        # Create model with current alpha guess
+        model = Model(fn)
+        result = model.fit(y, params(y, x, alpha_guess), x=x)
+        # Check if this is the best fit
+        if result.chisqr < best_chisqr:
+            best_chisqr = result.chisqr
+            best_result = result
+    return best_result.best_fit, best_result.best_values
 
 
 FITFN_MAP = {

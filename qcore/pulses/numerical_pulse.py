@@ -14,25 +14,20 @@ class NumericalPulse(Pulse):
         self,
         path: str,
         name: str,
-        length: Union[int, None] = None,  # None when no NumericalPulse is loaded
+        # length: int = 100,  # None when no NumericalPulse is loaded
         I_ampx: float = 1.0,
-        Q_ampx: float = 1.0,
-        pad: Union[int, None] = None,
+        Q_ampx: float = 1.0 ,
+        pad: int = 0,
         **parameters,
     ) -> None:
-        """ """
-        super().__init__(
-            name=name,
-            length=length,
-            I_ampx=I_ampx,
-            Q_ampx=Q_ampx,
-            pad=pad,
-            **parameters,
-        )
 
+        """ """
+        super().__init__(name=name, length=None, I_ampx=I_ampx, Q_ampx=Q_ampx, pad=pad, **parameters)
         self._path, self._pulse = None, None
-        self._length, self._pad = None, None
+        # self._length = length
+        # self._pad = None
         self.path = path  # will update _path, _pulse, _length, _pad
+        del self.length  # not needed once total_length is overriden below
 
     @property
     def path(self) -> str:
@@ -48,15 +43,15 @@ class NumericalPulse(Pulse):
         cycle = Pulse.CLOCK_CYCLE
         self._pad = (cycle - self._length % cycle) if self._length % cycle else 0
 
-    @property
-    def length(self) -> int:
-        """ """
-        return self._length
+    # @property
+    # def pad(self) -> int:
+    #     """ """
+    #     return self._pad
 
     @property
-    def pad(self) -> int:
+    def total_length(self) -> int:
         """ """
-        return self._pad
+        return int(len(self._pulse)) + self._pad
 
     @property
     def total_I_ampx(self) -> float:
@@ -70,9 +65,10 @@ class NumericalPulse(Pulse):
 
     def sample(self) -> tuple[list, list]:
         """ """
-        i_samples = np.real(self._pulse)
-        q_samples = np.imag(self._pulse)
+        i_samples = np.real(self._pulse)*self.total_I_ampx
+        q_samples = np.imag(self._pulse)*self.total_I_ampx
         pad = np.zeros(self.pad) if self.pad else []
+        # pad = []
 
         i_wave = np.concatenate((i_samples, pad))
         q_wave = np.concatenate((q_samples, pad))

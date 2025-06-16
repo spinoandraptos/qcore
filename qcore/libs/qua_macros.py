@@ -3,8 +3,12 @@
 from qm import qua
 from qm.qua.lib import Cast
 from qm.qua._dsl import _Variable
+from qm.qua._expressions import QuaExpression
 
 from qcore.helpers.logger import logger
+from qcore.modes import Readout
+from qcore.pulses.pulse import Pulse
+from qcore.modes import Qubit
 
 
 def align(*modes):
@@ -15,7 +19,7 @@ def align(*modes):
 def wait(duration: float, *modes):
     """duration to be supplied in nanoseconds and is converted to clock cycles"""
     logger.warning("Wait times will be rounded to nearest multiple of 4 nanoseconds.")
-    if isinstance(duration, _Variable):
+    if isinstance(duration, _Variable) or isinstance(duration, QuaExpression):
         qua.wait(Cast.to_int(duration / 4), *(mode.name for mode in modes))
     else:
         qua.wait(int(duration / 4), *(mode.name for mode in modes))
@@ -33,6 +37,112 @@ def reset_phase(*modes):
 def update_frequency(mode, value, units="Hz", keep_phase=False):
     qua.update_frequency(mode.name, value, units=units, keep_phase=keep_phase)
 
+
+def initialize_cavity(
+     rr: Readout,
+     qubit: Qubit, 
+     readout_pulse: Pulse,
+     qubit_pulse: Pulse, 
+     demod_type: str,
+     threshold_g: float,
+     wait_time: int,
+     ro_ampx: float = 1.0,
+     n_consecutive: int = 3,
+ ):
+
+    I_temp = qua.declare(qua.fixed)
+    Q_temp = qua.declare(qua.fixed)
+    counter = qua.declare(int)
+    qua.assign(counter, 0)
+    with qua.while_(counter < n_consecutive):
+        qua.align()
+        qubit.play(qubit_pulse)  
+        qua.align()
+        rr.measure(readout_pulse, (I_temp, Q_temp), ampx=ro_ampx, demod_type=demod_type)
+        qua.align()
+
+        # increase counter if qubit is in g, reset it to 0 otherwise
+        with qua.if_(I_temp > threshold_g):
+            qua.assign(counter, counter + 1)
+        with qua.else_():
+            qua.assign(counter, 0)
+        
+        qubit.play(qubit_pulse)  
+        qua.align()
+
+        # wait for RR to reset
+        wait(wait_time, rr)
+
+def initialize_cavity_AND_qubit(
+     rr: Readout,
+     qubit: Qubit, 
+     readout_pulse: Pulse,
+     qubit_pulse: Pulse, 
+     demod_type: str,
+     threshold_g: float,
+     wait_time: int,
+     ro_ampx: float = 1.0,
+     n_consecutive: int = 3,
+ ):
+
+    I_temp = qua.declare(qua.fixed)
+    Q_temp = qua.declare(qua.fixed)
+    I_temp2 = qua.declare(qua.fixed)
+    Q_temp2 = qua.declare(qua.fixed)
+    counter = qua.declare(int)
+    qua.assign(counter, 0)
+    with qua.while_(counter < n_consecutive):
+        qua.align()
+        qubit.play(qubit_pulse)  
+        qua.align()
+        rr.measure(readout_pulse, (I_temp, Q_temp), ampx=ro_ampx, demod_type=demod_type)
+        qua.align()
+
+        # increase counter if qubit is in g, reset it to 0 otherwise
+        # with qua.if_(I_temp > threshold_g):
+        #     qua.assign(counter, counter + 1)
+        # with qua.else_():
+        #     qua.assign(counter, 0)
+        
+        qubit.play(qubit_pulse)  
+        qua.align()
+        wait(wait_time, rr)
+        qua.align()
+        rr.measure(readout_pulse, (I_temp2, Q_temp2), ampx=ro_ampx, demod_type=demod_type)
+        qua.align()
+        # increase counter if qubit is in g, reset it to 0 otherwise
+        with qua.if_((I_temp > threshold_g) & (I_temp2 < threshold_g)):
+            qua.assign(counter, counter + 1)
+        with qua.else_():
+            qua.assign(counter, 0)
+
+        # wait for RR to reset
+        wait(wait_time, rr)
+
+def initialize_qubit(
+     rr: Readout,
+     readout_pulse: Pulse,
+     demod_type: str,
+     threshold_g: float,
+     wait_time: int,
+     ro_ampx: float = 1.0,
+     n_consecutive: int = 3,
+ ):
+
+    I_temp = qua.declare(qua.fixed)
+    Q_temp = qua.declare(qua.fixed)
+    counter = qua.declare(int)
+    qua.assign(counter, 0)
+    with qua.while_(counter < n_consecutive):
+        rr.measure(readout_pulse, (I_temp, Q_temp), ampx=ro_ampx, demod_type=demod_type)
+        # increase counter if qubit is in g, reset it to 0 otherwise
+        with qua.if_(I_temp < threshold_g):
+            qua.assign(counter, counter + 1)
+        with qua.else_():
+            qua.assign(counter, 0)
+
+        # wait for RR to reset
+        wait(wait_time, rr)
 
 class StreamProcessingError(Exception):
     """ """

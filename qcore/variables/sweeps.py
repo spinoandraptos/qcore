@@ -68,7 +68,7 @@ class Sweep(QuaVariable):
         # PointsSweep has discrete points - all int, float, str
         if isinstance(self.points, (list, tuple, set)):
             if all(isinstance(x, (int, float, str)) for x in self.points):
-                self.dtype = np.dtype(type(self.points[0]))
+                self.dtype = float#np.dtype(type(self.points[0]))
                 sweep_pts = DiscretePoints(points=self.points)
         elif isinstance(self.num, int):  # EvenlySpacedSweepPoints: LinSweep or LogSweep
             if self.kind == "lin":

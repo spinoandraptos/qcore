@@ -11,12 +11,10 @@ from qcore.helpers.logger import logger
 from qcore.modes.mode import Mode
 from qcore.libs.fit_fns import gaussian2d_symmetric
 
-ADC_TO_VOLTS = 2**-12
-TS = 1e-9  # Sampling time of the OPX in seconds
-T_OFS = 36.46
 
+DIVISION_LEN = 16
 
-class ReadoutTrainer:
+class ReadoutTrainerOctave:
     """ """
 
     def __init__(
@@ -54,21 +52,18 @@ class ReadoutTrainer:
         # self._reset_weights()
 
         # Get traces and average envelope when qubit in ground state
-        trace_g_list, timestamps_g = self._acquire_traces(self._qm, excite_qubit=False)
-        env_g = self._calc_average_envelope(trace_g_list, timestamps_g, T_OFS)
+        iig, iqg, qig, qqg = self._acquire_traces(self._qm, excite_qubit=False)
+        env_g = self._calc_average_envelope(iig, iqg, qig, qqg)
         # Get traces and average envelope when qubit in excited state
-        trace_e_list, timestamps_e = self._acquire_traces(self._qm, excite_qubit=True)
-        env_e = self._calc_average_envelope(trace_e_list, timestamps_e, T_OFS)
+        iie, iqe, qie, qqe = self._acquire_traces(self._qm, excite_qubit=True)
+        env_e = self._calc_average_envelope(iie, iqe, qie, qqe)
         # Get difference between average envelopes
-        envelope_diff = env_g - env_e
+        envelope_diff = env_e - env_g
 
-        # Normalize and squeeze by 1/4th
-        norm = np.max(np.abs(envelope_diff))
-        norm_envelope_diff = envelope_diff / norm
-        squeezed_diff = self._squeeze_array(norm_envelope_diff)  # convert shape
+        norm_envelope_diff = self._normalize_complex_array(envelope_diff)
 
         # Update readout with optimal weights
-        weights = self._update_weights(squeezed_diff)
+        weights = self._update_weights(norm_envelope_diff)
 
         # Plot envelopes
         fig, axes = plt.subplots(2, 1, sharex=True, figsize=(7, 10))
@@ -85,6 +80,19 @@ class ReadoutTrainer:
         plt.show()
 
         return env_g, env_e
+
+    def _normalize_complex_array(self, arr):
+        # Calculate the simple norm of the complex array
+        norm = np.sqrt(np.sum(np.abs(arr) ** 2))
+
+        # Normalize the complex array by dividing it by the norm
+        normalized_arr = arr / norm
+
+        # Rescale the normalized array so that the maximum value is 1
+        max_val = np.max(np.abs(normalized_arr))
+        rescaled_arr = normalized_arr / max_val
+
+        return rescaled_arr
 
     def _reset_weights(self):
         """
@@ -104,10 +112,12 @@ class ReadoutTrainer:
 
         handle = job.result_handles
         handle.wait_for_all_values()
-        timestamps = handle.get("timestamps").fetch_all()["value"]
-        adc = handle.get("adc").fetch_all()["value"]
+        ii = handle.get("II").fetch_all()
+        iq = handle.get("IQ").fetch_all()
+        qi = handle.get("QI").fetch_all()
+        qq = handle.get("QQ").fetch_all()
 
-        return ADC_TO_VOLTS * adc, timestamps
+        return ii, iq, qi, qq
 
     def _get_QUA_trace_acquisition(self, excite_qubit: bool = False):
         """ """
@@ -116,20 +126,29 @@ class ReadoutTrainer:
         (readout_pulse,) = self._rr.get_operations(self.readout_pulse)
         (qubit_pi_pulse,) = self._qubit.get_operations(self.qubit_pi_pulse)
 
+        number_of_divisions = int(
+            (readout_pulse.length + readout_pulse.pad) / (4 * DIVISION_LEN)
+        )
+
+        print(readout_pulse.length)
+        print(readout_pulse.pad)
+        print(number_of_divisions)
+
         with qm_qua.program() as acquire_traces:
-            adc = qm_qua.declare_stream(adc_trace=True)
             n = qm_qua.declare(int)
+            ind = qm_qua.declare(int)
+            II = qm_qua.declare(qm_qua.fixed, size=number_of_divisions)
+            IQ = qm_qua.declare(qm_qua.fixed, size=number_of_divisions)
+            QI = qm_qua.declare(qm_qua.fixed, size=number_of_divisions)
+            QQ = qm_qua.declare(qm_qua.fixed, size=number_of_divisions)
+
+            n_st = qm_qua.declare_stream()
+            II_st = qm_qua.declare_stream()
+            IQ_st = qm_qua.declare_stream()
+            QI_st = qm_qua.declare_stream()
+            QQ_st = qm_qua.declare_stream()
 
             with qm_qua.for_(n, 0, n < reps, n + 1):
-                # if self.ddrop_params:
-                #     self._macro_DDROP_reset()
-
-                # qua.measure(readout_pulse, self._rr.name, adc)
-                # qua.wait(wait_time, self._rr.name)
-                # qua.reset_phase(self._rr.name)
-
-                # qua.play("predist_square_plusminus_pulse" * qua.amp(-0.28), "FLUX")
-                # qua.wait(int(2500 // 4), self._qubit.name, self._rr.name)
                 if self.ddrop_params:
                     self._macro_DDROP_reset()
 
@@ -138,38 +157,34 @@ class ReadoutTrainer:
                     self._qubit.play(qubit_pi_pulse)
                     qua.align(self._rr, self._qubit)
 
-                self._rr.measure(readout_pulse, stream=adc)
+                self._rr.iw_training_measure(
+                    readout_pulse, DIVISION_LEN, (II, IQ, QI, QQ)
+                )
                 qua.wait(wait_time, self._rr)
 
-            with qm_qua.stream_processing():
-                # streams for envelope calculation
-                adc.input1().timestamps().save_all("timestamps")
-                adc.input1().save_all("adc")
+                with qm_qua.for_(ind, 0, ind < number_of_divisions, ind + 1):
+                    qm_qua.save(II[ind], II_st)
+                    qm_qua.save(IQ[ind], IQ_st)
+                    qm_qua.save(QI[ind], QI_st)
+                    qm_qua.save(QQ[ind], QQ_st)
+                qm_qua.save(n, n_st)
 
-                # streams for plotting/bug fixing
-                adc.input1().average().save("adc_avg")
-                adc.input1().average().fft().save("adc_fft")
+            with qm_qua.stream_processing():
+                n_st.save("iteration")
+                II_st.buffer(number_of_divisions).average().save("II")
+                IQ_st.buffer(number_of_divisions).average().save("IQ")
+                QI_st.buffer(number_of_divisions).average().save("QI")
+                QQ_st.buffer(number_of_divisions).average().save("QQ")
 
         return acquire_traces
 
-    def _calc_average_envelope(self, trace_list, timestamps, t_ofs):
-        int_freq = np.abs(self._rr.int_freq)
+    def _calc_average_envelope(self, ii, iq, qi, qq):
+        combined_i = ii + iq
+        combined_q = qi + qq
 
-        # demodulate
-        s = trace_list * np.exp(1j * 2 * np.pi * int_freq * TS * (timestamps - t_ofs))
+        combined_env = combined_i + 1j * combined_q
 
-        # filter 2*omega_IF using hann filter
-        hann = signal.hann(int(2 / TS / int_freq), sym=True)
-        hann = hann / np.sum(hann)
-        s_filtered = np.array([np.convolve(s_single, hann, "same") for s_single in s])
-
-        # adjust envelope
-        env = 2 * s_filtered.conj()
-
-        # get average envelope
-        avg_env = np.average(env, axis=0)
-
-        return avg_env
+        return combined_env
 
     def _squeeze_array(self, s):
         """
@@ -179,11 +194,50 @@ class ReadoutTrainer:
 
     def _update_weights(self, squeezed_diff):
         weights = {}
+        # weights["I"] = np.array(
+        #     [
+        #         np.real(squeezed_diff).tolist(),
+        #         np.imag(-squeezed_diff).tolist(),
+        #     ]
+        # )
+        # weights["Q"] = np.array(
+        #     [
+        #         np.imag(squeezed_diff).tolist(),
+        #         np.real(squeezed_diff).tolist(),
+        #     ]
+        # )
+
+        # weights["Q_Minus"] = np.array(
+        #     [
+        #         np.imag(-squeezed_diff).tolist(),
+        #         np.real(-squeezed_diff).tolist(),
+        #     ]
+        # )
+        # print(np.real(squeezed_diff).tolist())
+        # print(np.imag(squeezed_diff).tolist())
+        opt_weights_real = np.real(squeezed_diff)
+        opt_weights_minus_real = -1 * np.real(squeezed_diff)
+        opt_weights_imag = np.imag(squeezed_diff)
+        opt_weights_minus_imag = -1 * np.imag(squeezed_diff)
+
         weights["I"] = np.array(
-            [np.real(squeezed_diff).tolist(), (np.imag(-squeezed_diff)).tolist()]
+            [
+                opt_weights_real.tolist(),
+                opt_weights_minus_imag.tolist(),
+            ]
         )
         weights["Q"] = np.array(
-            [np.imag(-squeezed_diff).tolist(), np.real(-squeezed_diff).tolist()]
+            [
+                opt_weights_imag.tolist(),
+                opt_weights_real.tolist(),
+            ]
+        )
+
+        weights["Q_Minus"] = np.array(
+            [
+                opt_weights_minus_imag.tolist(),
+                opt_weights_minus_real.tolist(),
+            ]
         )
 
         path = self.weights_file_path
@@ -401,7 +455,7 @@ class ReadoutTrainer:
                     self._qubit.play(qubit_pi_pulse)
                     qua.align(self._rr, self._qubit)
 
-                self._rr.measure(readout_pulse, (I, Q))
+                self._rr.measure(readout_pulse, (I, Q), demod_type="dual", ampx=1.0)
                 qm_qua.save(I, "I")
                 qm_qua.save(Q, "Q")
                 qua.wait(wait_time, self._rr)
@@ -409,14 +463,15 @@ class ReadoutTrainer:
         return acquire_IQ
 
     def _update_threshold(self, threshold):
+        print(f"Threshold: {threshold}")
         (readout_pulse,) = self._rr.get_operations(self.readout_pulse)
         readout_pulse.threshold = threshold
 
     def _calculate_confusion_matrix(self, Ig_list, Ie_list, threshold):
-        pgg = 100 * round((np.sum(Ig_list > threshold) / len(Ig_list)), 3)
-        pge = 100 * round((np.sum(Ig_list < threshold) / len(Ig_list)), 3)
-        pee = 100 * round((np.sum(Ie_list < threshold) / len(Ie_list)), 3)
-        peg = 100 * round((np.sum(Ie_list > threshold) / len(Ie_list)), 3)
+        pgg = 100 * round((np.sum(Ig_list < threshold) / len(Ig_list)), 3)
+        pge = 100 * round((np.sum(Ig_list > threshold) / len(Ig_list)), 3)
+        pee = 100 * round((np.sum(Ie_list > threshold) / len(Ie_list)), 3)
+        peg = 100 * round((np.sum(Ie_list < threshold) / len(Ie_list)), 3)
         print("\nState prepared in |g>")
         print(f"   Measured in |g>: {pgg}%")
         print(f"   Measured in |e>: {pge}%")

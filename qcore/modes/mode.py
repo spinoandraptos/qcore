@@ -1,5 +1,5 @@
 """ """
-from typing import Any, Union
+from typing import Any, Union, Tuple
 
 from qm import qua
 from qm.qua._dsl import _Variable
@@ -12,10 +12,12 @@ from qcore.pulses.readout_pulse import ReadoutPulse
 from qcore.resource import Resource
 
 
+FEMPort = Tuple[int, int]
+
 class Mode(Resource):
     """ """
 
-    PORTS_KEYS = ("I", "Q")
+    PORTS_KEYS = ("I", "Q", "out1", "out2")
     OFFSETS_KEYS = (*PORTS_KEYS, "G", "P")
     RF_SWITCH_DIGITAL_MARKER = "RFSWITCH_ON"
 
@@ -28,10 +30,11 @@ class Mode(Resource):
         **parameters,
     ) -> None:
         """ """
+        self.octave_mixed: bool = False
         self.lo_name: str = str(lo_name)
         self.int_freq: float = int_freq
 
-        self._ports: dict[str, int] = dict.fromkeys(Mode.PORTS_KEYS)
+        self._ports: dict[str, Union[int, FEMPort]] = dict.fromkeys(Mode.PORTS_KEYS)
         self._mixer_offsets: dict[str, float] = dict.fromkeys(self.OFFSETS_KEYS, 0.0)
         self._rf_switch: RFSwitch = None
         self._rf_switch_on: bool = False
@@ -76,7 +79,7 @@ class Mode(Resource):
 
     def has_mixed_inputs(self) -> bool:
         """ """
-        return self._ports["I"] is not None and self._ports["Q"] is not None
+        return self._ports.get("I") is not None and self._ports.get("Q") is not None
 
     @property
     def mixer_offsets(self) -> dict[str, float]:
@@ -156,6 +159,12 @@ class Mode(Resource):
 
     def add_operations(self, *operations: Pulse) -> None:
         """ """
+        if self._rf_switch is not None:
+            for operation in operations:
+                if not isinstance(operations, ReadoutPulse):
+                    marker = DigitalWaveform(self.RF_SWITCH_DIGITAL_MARKER)
+                    operation.digital_marker = marker
+
         self.operations = [*self._operations.values(), *operations]
 
     def remove_operations(self, *names: str) -> None:
@@ -189,10 +198,12 @@ class Mode(Resource):
             qua.frame_rotation_2pi(phase, self.name)
         elif phase:
             qua.frame_rotation_2pi(phase, self.name)
+
         if num_ampxs == 1:
             qua.play(op_name * qua.amp(ampx), self.name, **kwargs)
         else:
             qua.play(op_name * qua.amp(*ampx), self.name, **kwargs)
+            
         if isinstance(phase, _Variable):
             qua.frame_rotation_2pi(phase, self.name)
         elif phase:
